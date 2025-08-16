@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: bingx_bot_web
+    ports:
+      - "5000:5000"
+    # Load environment variables from a local .env file for secrets and
+    # thresholds. Provide .env.example as a template.
+    env_file:
+      - .env
+    volumes:
+      # Mount the current project directory into the container for live
+      # development. In production you may prefer to bake the source into
+      # the image and omit this volume.
+      - .:/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5

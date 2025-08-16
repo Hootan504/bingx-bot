@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ربات معاملات آتی BingX — پیشرفته</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    body{margin:0;background:#0b0f14;color:#e6edf3;font-family:Inter,IRANSans,Segoe UI,system-ui,-apple-system,sans-serif}
+    .topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:12px 16px;background:#111826;border-bottom:1px solid #1f2937}
+    .brand{font-weight:700}
+    .status{margin-inline-start:auto}
+    .actions button{margin-inline-start:8px}
+    .container{max-width:1200px;margin:24px auto;padding:0 16px}
+    .panel{background:#0f1720;border:1px solid #1f2937;border-radius:14px;margin:16px 0;padding:16px}
+    .panel h3{margin:0 0 12px 0}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    .grid.narrow{grid-template-columns:repeat(2,minmax(0,1fr))}
+    label{display:flex;flex-direction:column;gap:6px;font-size:13px}
+    input,select,textarea,button{background:#0b1220;border:1px solid #1f2937;color:#e6edf3;border-radius:10px;padding:10px}
+    input[type="range"]{padding:0}
+    .row-actions{display:flex;gap:8px;align-items:center}
+    .primary{background:#2563eb;border-color:#2563eb}
+    .danger{background:#ef4444;border-color:#ef4444}
+    .danger.ghost{background:transparent;color:#ef4444}
+    .badge{background:#1f2937;border-radius:999px;padding:4px 10px;font-size:12px}
+    .conn-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+    .kv{background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:10px;display:flex;justify-content:space-between;gap:10px}
+    .chart-host{height:420px;border:1px solid #1f2937;border-radius:14px;overflow:hidden}
+    .tv{width:100%;height:100%}
+    .logs{height:260px;background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:10px;overflow:auto;white-space:pre-wrap}
+    @media (max-width:1000px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.conn-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+    @media (max-width:640px){.grid{grid-template-columns:1fr}.conn-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">BingX Futures Bot</div>
+    <div class="status"><span>قیمت:</span> <span id="live-price">—</span></div>
+    <div class="actions">
+      <button id="btn-run" class="primary">شروع</button>
+      <button id="btn-stop" class="danger">توقف</button>
+      <button id="btn-kill" class="danger ghost">Kill Switch</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <h3>پیکربندی سریع</h3>
+      <div class="grid">
+        <label>Symbol
+          <input id="symbol" value="BTC/USDT:USDT" />
+        </label>
+        <label>Timeframe
+          <input id="timeframe" value="15m" />
+        </label>
+        <label>Trend TF
+          <input id="trend_tf" value="4h" />
+        </label>
+        <label>Strategy
+          <select id="strategy">
+            <option value="sma">sma</option>
+            <option value="ema">ema</option>
+            <option value="rsi">rsi</option>
+            <option value="macd">macd</option>
+            <option value="composite" selected>composite</option>
+          </select>
+        </label>
+        <label>USD per trade
+          <input id="usd_per_trade" type="number" step="0.01" value="50" />
+        </label>
+        <label><input type="checkbox" id="dry_run" checked /> Dry-run</label>
+        <label><input type="checkbox" id="loop" checked /> Loop</label>
+        <label>Sleep (sec)
+          <input id="sleep" type="number" step="1" value="30" />
+        </label>
+      </div>
+    </section>
+
+    <!-- System health panel: displays connectivity status for key backend endpoints. -->
+    <section class="panel">
+      <h3>سلامت سیستم</h3>
+      <div class="conn-grid">
+        <div class="kv"><div>Ticker</div><div id="health-ticker" class="badge">—</div></div>
+        <div class="kv"><div>Status</div><div id="health-status" class="badge">—</div></div>
+        <div class="kv"><div>Logs</div><div id="health-logs" class="badge">—</div></div>
+        <div class="kv"><div>History</div><div id="health-history" class="badge">—</div></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>اکتیو کانکشن و وضعیت پوزیشن</h3>
+      <div class="conn-grid">
+        <div class="kv"><div>UI ▶ Bot</div><div id="ui-bot" class="badge">idle</div></div>
+        <div class="kv"><div>Bot ▶ Exchange</div><div id="bot-ex" class="badge">—</div></div>
+        <div class="kv"><div>Mode</div><div id="api-mode">dry-run</div></div>
+        <div class="kv"><div>Price</div><div id="ac-price">—</div></div>
+        <div class="kv"><div>Balance</div><div id="ac-balance">—</div></div>
+        <div class="kv"><div>Side</div><div id="pos-side">—</div></div>
+        <div class="kv"><div>Size</div><div id="pos-size">—</div></div>
+        <div class="kv"><div>Entry</div><div id="pos-entry">—</div></div>
+        <div class="kv"><div>Mark</div><div id="pos-mark">—</div></div>
+        <div class="kv"><div>Leverage</div><div id="pos-lev">—</div></div>
+        <div class="kv"><div>uPnL</div><div id="pos-pnl">—</div></div>
+        <div class="kv"><div>ROE%</div><div id="pos-roe">—</div></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>مدیریت ریسک</h3>
+      <div class="grid">
+        <label>Position size mode
+          <select id="ps_mode">
+            <option value="fixed" selected>fixed USD</option>
+            <option value="percent">percent of balance</option>
+            <option value="atr">ATR-based</option>
+          </select>
+        </label>
+        <label>Position size value
+          <input id="ps_value" type="number" step="0.01" value="50" />
+        </label>
+        <label>Leverage
+          <input id="leverage" type="number" step="1" value="5" />
+        </label>
+        <label>Margin mode
+          <select id="margin_mode">
+            <option value="isolated" selected>isolated</option>
+            <option value="cross">cross</option>
+          </select>
+        </label>
+        <label>Stop Loss %
+          <input id="sl_pct" type="number" step="0.1" placeholder="1.5" />
+        </label>
+        <label>TP1 %
+          <input id="tp1_pct" type="number" step="0.1" placeholder="1.0" />
+        </label>
+        <label>TP2 %
+          <input id="tp2_pct" type="number" step="0.1" placeholder="2.0" />
+        </label>
+        <label>TP3 %
+          <input id="tp3_pct" type="number" step="0.1" placeholder="3.0" />
+        </label>
+        <label>Trailing stop %
+          <input id="trail_pct" type="number" step="0.1" placeholder="0.8" />
+        </label>
+        <label>Daily loss limit %
+          <input id="daily_loss_pct" type="number" step="0.1" placeholder="5" />
+        </label>
+        <label>Max open positions
+          <input id="max_positions" type="number" step="1" value="1" />
+        </label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>اجرا</h3>
+      <div class="grid">
+        <label>Order type
+          <select id="order_type">
+            <option value="market" selected>market</option>
+            <option value="limit">limit</option>
+            <option value="stop">stop</option>
+            <option value="stop_limit">stop_limit</option>
+          </select>
+        </label>
+        <label>Time in Force
+          <select id="tif">
+            <option value="GTC" selected>GTC</option>
+            <option value="IOC">IOC</option>
+            <option value="FOK">FOK</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="reduce_only"/> Reduce-only</label>
+        <label><input type="checkbox" id="post_only"/> Post-only</label>
+        <label>Slippage tolerance %
+          <input id="slippage_pct" type="number" step="0.1" value="0.2" />
+        </label>
+        <label>Cooldown sec
+          <input id="cooldown_sec" type="number" step="1" value="30" />
+        </label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>فیلترها و تاییدیه‌ها</h3>
+      <div class="grid">
+        <label>Min volume
+          <input id="min_volume" type="number" step="0.01" placeholder="" />
+        </label>
+        <label>Max ATR %
+          <input id="max_atr_pct" type="number" step="0.1" placeholder="" />
+        </label>
+        <label>Session start (HH:MM)
+          <input id="session_start" placeholder="00:00" />
+        </label>
+        <label>Session end (HH:MM)
+          <input id="session_end" placeholder="23:59" />
+        </label>
+        <label>Whitelist symbols (comma)
+          <input id="whitelist" placeholder="BTC/USDT:USDT,ETH/USDT:USDT" />
+        </label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>Composite Weights</h3>
+      <div class="grid narrow">
+        <label>SMA <input id="w_sma" type="range" min="0" max="100" value="25"/><span id="w_sma_val">25%</span></label>
+        <label>EMA <input id="w_ema" type="range" min="0" max="100" value="25"/><span id="w_ema_val">25%</span></label>
+        <label>RSI <input id="w_rsi" type="range" min="0" max="100" value="25"/><span id="w_rsi_val">25%</span></label>
+        <label>MACD <input id="w_macd" type="range" min="0" max="100" value="25"/><span id="w_macd_val">25%</span></label>
+      </div>
+      <p class="hint">وزن‌ها نرمال‌سازی می‌شوند تا جمع = 100 باشد.</p>
+    </section>
+
+    <section class="panel">
+      <h3>داده و شبیه‌ساز</h3>
+      <div class="grid">
+        <label>Lookback bars
+          <input id="lookback" type="number" step="1" value="300" />
+        </label>
+        <label>Maker fee %
+          <input id="fee_maker" type="number" step="0.001" value="0.02" />
+        </label>
+        <label>Taker fee %
+          <input id="fee_taker" type="number" step="0.001" value="0.05" />
+        </label>
+        <label>Funding rate %
+          <input id="funding_pct" type="number" step="0.001" value="0.01" />
+        </label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>لاگ و اعلان</h3>
+      <div class="grid">
+        <label>Log level
+          <select id="log_level">
+            <option value="error">error</option>
+            <option value="info" selected>info</option>
+            <option value="debug">debug</option>
+          </select>
+        </label>
+        <label>Webhook URL
+          <input id="webhook_url" placeholder="https://..." />
+        </label>
+        <label><input type="checkbox" id="sound_on"/> Sound on fill</label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>اتصال و امنیت</h3>
+      <div class="grid">
+        <label>Exchange
+          <select id="exchange_id">
+            <option value="bingx" selected>bingx</option>
+            <option value="binance">binance</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="testnet"/> Testnet (اگر پشتیبانی شود)</label>
+        <label>API Key <input id="api_key" type="password" autocomplete="off"/></label>
+        <label>API Secret <input id="api_secret" type="password" autocomplete="off"/></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>پروفایل‌ها</h3>
+      <div class="grid">
+        <label>Profile name <input id="profile_name" placeholder="My-Scalp-15m"/></label>
+        <div class="row-actions">
+          <button id="btn-save-prof" type="button">ذخیره</button>
+          <button id="btn-load-prof" type="button">بازیابی</button>
+          <button id="btn-reset-prof" type="button">بازنشانی</button>
+          <button id="btn-export-prof" type="button">Export</button>
+          <button id="btn-import-prof" type="button">Import</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>چارت و قیمت</h3>
+      <div id="chart-host" class="chart-host">
+        <iframe id="tv-frame" class="tv" src="" frameborder="0"></iframe>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>خروجی</h3>
+      <pre id="logs" class="logs"></pre>
+    </section>
+  </main>
+
+  <script src="/static/main.js"></script>
+</body>
+</html>

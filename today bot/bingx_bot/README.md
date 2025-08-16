@@ -1,0 +1,1 @@
+Run: python -m bingx_bot_fixed.ui.app --host 127.0.0.1 --port 5000
